@@ -75,6 +75,7 @@ The delegation tool has its own row:
 | `provider` | — | Required. The subagent provider (`spawn` or `fork`) every member runs on. |
 | `maxValidationRounds` | `3` | Validator rejections a `frugal` run may take before reporting failure. |
 | `maxTaskTokens` | unset | Provider-billed tokens one `frugal` task may spend, summed over every member. |
+| `maxConcurrentMembers` | `0` (derived) | Members of one fan-out that may run at once. `0` derives the host's available parallelism minus two, capped at 16. |
 
 ## Modes
 

@@ -9,7 +9,7 @@ const BUNDLE = { mode: 'maximum', keyword: 'ultracode', reminderEveryTurns: 10 }
 const text = value => [{ type: 'text', text: value }]
 
 /** A 0.2.x subagent runtime: startActivation + sendMessage, no start(). */
-function activationRuntime(results) {
+function activationRuntime(results, hooks = {}) {
   const started = []
   const disposed = []
   return {
@@ -23,6 +23,9 @@ function activationRuntime(results) {
       const next = results.shift() ?? { output: text('ok'), stopReason: 'completed' }
       let settle
       const result = typeof next === 'function' ? new Promise(resolve => { settle = resolve }) : Promise.resolve(next)
+      // A function entry is a child held pending until the test releases it, so
+      // a pool test can observe exactly how many children the tool keeps alive.
+      hooks.onStart?.({ childId, release: (value) => { settle?.(value ?? { output: text('done'), stopReason: 'completed' }) } })
       return { childId, result, dispose: async () => { disposed.push(childId); settle?.({ output: [], stopReason: 'aborted' }) } }
     },
     sendMessage() { throw new Error('not used') },
@@ -173,6 +176,44 @@ describe('0.2.x subagent runtime (startActivation)', () => {
     assert.equal(subagents.started[0].request.agentOptions.provider, 'openrouter')
     assert.match(value.output, /deepseek-official\/deepseek-v4-pro is unavailable .* ran on the session's route openrouter\/flash instead/)
   })
+  test('refuses an empty prompt instead of starting a child with nothing to do', async () => {
+    const subagents = activationRuntime([{ output: text('done'), stopReason: 'completed' }])
+    const { definition } = await bootDelegate({ subagents })
+    await assert.rejects(
+      definition.execute({ description: 'blank', tasks: ['', '  '] }, exec(modernAgent(activeSession('maximum')))),
+      /refuses an empty prompt/,
+    )
+  })
+
+  test('a wide fan-out runs no wider than maxConcurrentMembers, in caller order', async () => {
+    // Every child is held pending until released, so the count observed right
+    // after the first batch settles is exactly the pool width.
+    const releases = []
+    const subagents = activationRuntime(
+      Array.from({ length: 8 }, () => () => {}),
+      { onStart: ({ release }) => releases.push(release) },
+    )
+    const { definition } = await bootDelegate({ subagents, delegateConfig: { provider: 'spawn', maxConcurrentMembers: 3 } })
+    const tasks = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
+    const running = definition.execute({ description: 'wide', tasks }, exec(modernAgent(activeSession('maximum'))))
+
+    await settle()
+    assert.equal(subagents.started.length, 3, 'the pool starts exactly three members and holds the rest')
+
+    // Release every child as it appears, draining the queue in waves.
+    const drain = async () => {
+      for (let wave = 0; wave < 20; wave += 1) {
+        await settle()
+        if (releases.length === 0) return
+        while (releases.length > 0) releases.shift()()
+      }
+    }
+    await drain()
+    const value = await running
+    assert.equal(subagents.started.length, 8)
+    assert.equal(value.output.split('\n\n---\n\n').length, 8)
+  })
+
   test('maxTaskTokens is reported as unenforced where the runtime reports no usage', async () => {
     const subagents = activationRuntime([
       { output: text('done'), stopReason: 'completed' },
