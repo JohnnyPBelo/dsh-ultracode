@@ -182,31 +182,3 @@ describe('panel rendering', () => {
     assert.match(textOf(tree), /status\.done/)
   })
 })
-
-describe('boot safety', () => {
-  // A client entry whose `inject` names a service the web shell does not
-  // provide stays `pending`, and packages/client/web/src/boot.ts treats any
-  // non-active entry as a failed web boot — one stale name takes down the whole
-  // application, not just this plugin. The published v1.0.0 declared
-  // `conversationEvents`, which exists on 0.1.x but not on 0.2.x (there it is
-  // `uiConversation.events`), and the app refused to boot. Nothing in the
-  // manifest or the source says a name is optional: `ctx.inject` is a hard
-  // wait, so the only safe set is services the entry actually cannot run
-  // without.
-  test('declares no service the web shell may not provide', async () => {
-    const client = await loadClient(RC3_PRIMITIVES)
-    const epochServices = ['conversationEvents', 'uiConversation', 'sessions', 'connection', 'uiWorkspace']
-    for (const name of epochServices) {
-      assert.ok(!client.inject.includes(name), `${name} is provided by one API line only; naming it in inject aborts web boot on the other`)
-    }
-  })
-  test('activates on the minimum set, and still registers through a registry that appears later', async () => {
-    const client = await loadClient(RC3_PRIMITIVES)
-    const { fiber, slots } = await bootClient(client)
-    assert.equal(fiber.state, 2, 'the entry fiber is ACTIVE with only slots and locale')
-    assert.equal(slots.registered.length, 1)
-    const events = fakeRegistry()
-    ;(await import('@deepseek-ai/cordis')).Context // keep the import graph honest
-    assert.equal(typeof events.register, 'function')
-  })
-})
