@@ -1,0 +1,60 @@
+{
+  "name": "dsh-ultracode",
+  "version": "1.0.0",
+  "description": "UltraCode for DeepSeek Harness: a deep-work mode that routes work across models, delegates in parallel, and verifies the result before reporting it.",
+  "license": "MIT",
+  "type": "module",
+  "main": "lib/host.js",
+  "exports": {
+    ".": {
+      "default": "./lib/host.js"
+    },
+    "./delegate": {
+      "default": "./lib/delegate.js"
+    },
+    "./invariant": {
+      "default": "./lib/host-invariant.js"
+    },
+    "./delegate/invariant": {
+      "default": "./lib/delegate-invariant.js"
+    },
+    "./client": {
+      "default": "./client/client.js"
+    },
+    "./handoff": {
+      "default": "./lib/types-host/handoff.js"
+    },
+    "./vision": {
+      "default": "./lib/types-host/vision.js"
+    },
+    "./types": {
+      "default": "./lib/types-host/types.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "client",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web"
+    },
+    "manifestVersion": 1
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.5",
+    "@deepseek-ai/dsh-llm": "^0.2.1-rc.3",
+    "@deepseek-ai/dsh-session": "^0.2.1-rc.3",
+    "@deepseek-ai/dsh-tools": "^0.2.1-rc.3"
+  },
+  "dependencies": {
+    "zod": "^4.4.3"
+  }
+}

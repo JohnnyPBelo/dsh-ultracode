@@ -1,0 +1,44 @@
+# dsh-ultracode bundle patch
+#
+# This file is the `dsh.bundle.patch` layer of the published package. When the
+# plugin is installed through the official CLI —
+#
+#   dsh plugin --profile <name> add <git-or-npm-spec>
+#
+# — and the package is listed in `dsh.profile.bundles`, the profile boot merges
+# THIS patch.
+#
+# Two host rows mount the same package. The row names carry a SUBPATH on
+# purpose: the client-module scanner treats a bare `@scope/name` specifier as
+# naming that package, and it fails composition when one package resolves from
+# two active Loader rows. A specifier with a subpath (`dsh-ultracode/delegate`)
+# yields no package identity, so both halves mount cleanly while the `dsh.client`
+# half is discovered from the single bare `.` row. Do not collapse these into
+# two rows declaring the bare package name.
+- insert:
+    - id: ultracode
+      name: 'dsh-ultracode'
+      config:
+        mode: maximum
+        keyword: ultracode
+        reminderEveryTurns: 10
+        section: |
+          UltraCode is on in {mode} mode: optimize for the most exhaustive, correct answer — not the fastest or cheapest. Decompose every substantive task, delegate the parts in parallel, and verify the assembled result before reporting it. {routes} Conversation and trivial turns stay solo.
+
+          Delegate with the ultracode_delegate tool, not the plain subagent tool: only that tool applies the mode's routing, and in frugal mode it also runs the validator loop until the code passes. Give every child a self-contained prompt; it does not see this conversation.
+
+          When a delegated model cannot read images, the handoff describes them through an image-capable model first, so send the images you have rather than working around them.
+        catalog:
+          routes:
+            - provider: deepseek-official
+              model: deepseek-v4-pro
+              effort: max
+            - provider: deepseek-official
+              model: deepseek-v4-flash
+              effort: low
+
+    - id: tool-ultracode-delegate
+      name: 'dsh-ultracode/delegate'
+      config:
+        provider: spawn
+        maxValidationRounds: 3
