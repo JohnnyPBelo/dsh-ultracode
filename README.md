@@ -25,6 +25,10 @@ Then add the bundle to the profile's `dsh.profile.bundles` list. The package shi
 
 Restart the app after installing. A new client bundle reaches the browser only after a reload, and the host rows only after a restart.
 
+`dsh` refuses to manage the `desktop` profile for any command — `profile "desktop" is managed exclusively by the Electron application` — so install it there through the application's own plugin manager rather than this CLI. A profile that installs a git-hosted plugin also needs pnpm's build permission for it: when pnpm prints `ERR_PNPM_IGNORED_BUILDS`, add the exact keys it names under `allowBuilds` in the profile's `pnpm-workspace.yaml` and re-run.
+
+To try a build without touching a working profile, copy its `package.json`, `cordis.patch.yml`, and `pnpm-workspace.yaml` into a new profile directory and install there first. That reproduces the target's full bundle composition, which is the only way to see whether a new row activates among the rows already installed.
+
 ## Configuration
 
 The bundle patch mounts the plugin with a working default. To change it, override the row in your profile's own `cordis.patch.yml` — an entry without `insert` overrides a row by id:
