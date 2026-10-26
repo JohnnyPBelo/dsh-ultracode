@@ -66,6 +66,41 @@ function activeSession(mode = 'maximum') {
 }
 
 const exec = (agent, signal = new AbortController().signal) => ({ agent, signal })
+
+// `fs` and `attachments` carry the image handoff alone. Naming them in `inject`
+// would leave the entry pending on any composition without them, and both boot
+// paths treat a pending entry as a fatal application error — a text-only
+// delegation would take the whole application down with it.
+describe('optional dependencies', () => {
+  test('activates with neither fs nor attachments mounted', async () => {
+    const subagents = activationRuntime([{ output: text('child answer'), stopReason: 'completed' }])
+    const tools = { registered: [], register(definition, options) { this.registered.push({ definition, options }); return () => {} } }
+    const booted = await bootHost(host.UltraCodeController, BUNDLE, { systemPrompt: fakeSystemPrompt(), tools, subagents })
+    const fiber = await booted.root.plugin(delegate, { provider: 'spawn' })
+    await settle()
+
+    assert.equal(fiber.state, 2, 'the delegate entry must reach ACTIVE without fs or attachments')
+    assert.equal(booted.root.get('fs'), undefined)
+    assert.equal(booted.root.get('attachments'), undefined)
+    assert.equal(tools.registered.length, 1)
+  })
+
+  test('reports the missing service when images are requested', async () => {
+    const subagents = activationRuntime([{ output: text('child answer'), stopReason: 'completed' }])
+    const tools = { registered: [], register(definition, options) { this.registered.push({ definition, options }); return () => {} } }
+    const booted = await bootHost(host.UltraCodeController, BUNDLE, { systemPrompt: fakeSystemPrompt(), tools, subagents })
+    await booted.root.plugin(delegate, { provider: 'spawn' })
+    await settle()
+
+    const session = activeSession()
+    const agent = { session, options: {}, inject() {}, model: undefined }
+    await assert.rejects(
+      () => tools.registered[0].definition.execute({ description: 'x', prompt: 'go', images: ['/tmp/whatever.png'] }, exec(agent)),
+      /images needs an attachment store/,
+    )
+  })
+})
+
 const kinds = session => ultraRecords(session).map(event => host.ultraEventType(event))
 
 describe('0.2.x subagent runtime (startActivation)', () => {

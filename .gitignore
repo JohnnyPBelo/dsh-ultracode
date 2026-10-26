@@ -1,3 +1,5 @@
 node_modules/
 *.log
 .DS_Store
+# Profile backups taken before installing; they hold machine-local paths.
+.profile-*.bak
