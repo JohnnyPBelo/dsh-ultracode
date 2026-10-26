@@ -15,6 +15,28 @@
 # yields no package identity, so both halves mount cleanly while the `dsh.client`
 # half is discovered from the single bare `.` row. Do not collapse these into
 # two rows declaring the bare package name.
+#
+# Routes: this layer configures NO model catalog on purpose. Without one every
+# UltraCode role runs on the session's own provider and model — `maximum` at
+# that model's highest reasoning effort, `frugal` with the coder at its lowest
+# and the validator at its highest — so the plugin never depends on a provider
+# the installation lacks. To rank several models, override the row in the
+# profile's own cordis.patch.yml. A profile entry REPLACES this row's whole
+# config, so restate every key you want to keep:
+#
+#   - id: ultracode
+#     config:
+#       mode: maximum
+#       keyword: ultracode
+#       reminderEveryTurns: 10
+#       catalog:
+#         routes:                      # best first; frugal codes on the last
+#           - { provider: <provider>, model: <strong-model>, effort: max }
+#           - { provider: <provider>, model: <cheap-model>, effort: low }
+#
+# A route whose provider is not registered or has no usable credential falls
+# back to the session's route, and the delegation result says so. The guidance
+# text has a built-in default; set `section` only to replace it.
 - insert:
     - id: ultracode
       name: 'dsh-ultracode'
@@ -22,20 +44,6 @@
         mode: maximum
         keyword: ultracode
         reminderEveryTurns: 10
-        section: |
-          UltraCode is on in {mode} mode: optimize for the most exhaustive, correct answer — not the fastest or cheapest. Decompose every substantive task, delegate the parts in parallel, and verify the assembled result before reporting it. {routes} Conversation and trivial turns stay solo.
-
-          Delegate with the ultracode_delegate tool, not the plain subagent tool: only that tool applies the mode's routing, and in frugal mode it also runs the validator loop until the code passes. Give every child a self-contained prompt; it does not see this conversation.
-
-          When a delegated model cannot read images, the handoff describes them through an image-capable model first, so send the images you have rather than working around them.
-        catalog:
-          routes:
-            - provider: deepseek-official
-              model: deepseek-v4-pro
-              effort: max
-            - provider: deepseek-official
-              model: deepseek-v4-flash
-              effort: low
 
     - id: tool-ultracode-delegate
       name: 'dsh-ultracode/delegate'

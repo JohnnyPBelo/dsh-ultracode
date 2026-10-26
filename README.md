@@ -80,6 +80,18 @@ The delegation tool has its own row:
 
 Both modes end in the same place: work is delegated, and the result is checked before it is reported.
 
+## Tests
+
+The suite runs against a real DeepSeek Harness runtime, not a mock: it imports the bundles, boots the client entry on a live Cordis root, and checks the manifest and bundle patch.
+
+```sh
+DSH_TEST_RUNTIMES="/opt/DeepSeek Harness/resources/dsh/node_modules" node tests/run.mjs
+```
+
+`DSH_TEST_RUNTIMES` is a `:`-separated list of `node_modules` directories, so one run can cover several installed harness versions.
+
+One test exists because of a shipped defect. A client entry whose `inject` names a service the web shell does not provide stays `pending`, and `packages/client/web/src/boot.ts` treats any non-active entry as a failed web boot — so one stale service name takes down the whole application, not just this plugin. Version 1.0.0 declared `conversationEvents`, which 0.2.x renamed to `uiConversation.events`, and the app refused to boot. `tests/client.test.mjs` now boots the entry on a live root and fails if any service that differs between the two API lines is named in `inject`. Only `slots` and `locale` are required; every other service is resolved at the call site, where its absence degrades one feature instead of the boot.
+
 ## Requirements
 
 - DeepSeek Harness with the `dsh.profile.bundles` mechanism.
