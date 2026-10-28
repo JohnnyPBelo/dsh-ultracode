@@ -44,7 +44,7 @@ describe('client entry', () => {
     const client = await loadClient()
     const root = new Context()
     root.provide('slots', { inject(_n, cb) { cb() }, register() { return () => {} } })
-    root.provide('locale', { register() { return () => {} } })
+    root.provide('locale', { register() { return () => {} }, bind: ns => key => `${ns}:${key}` })
     const fiber = root.plugin({ name: 'dsh-ultracode', inject: client.inject, apply: client.apply })
     await settle()
     assert.equal(STATE[fiber.state], 'active')
@@ -64,17 +64,36 @@ describe('host rows', () => {
     root.provide('fs', {})
     root.provide('attachments', {})
   }
+  test('both row schemas describe the volatile form the Plugins page renders', async () => {
+    const host = await import('../lib/host.js')
+    const delegate = await import('../lib/delegate.js')
+    // The settings service builds a row's form from the row's own schema and
+    // skips a row whose schema cannot describe an editable field, so a schema
+    // without `toJSON` or without one volatile node is a row with no page.
+    for (const [label, schema] of [['the mode row', host.Config], ['the delegation row', delegate.Config]]) {
+      assert.equal(typeof schema.toJSON, 'function', `${label} declares a schema the settings service can describe`)
+      const json = JSON.stringify(schema.toJSON())
+      assert.ok(json.includes('volatile'), `${label} has at least one editable field`)
+    }
+    assert.ok(JSON.stringify(delegate.Config.toJSON()).includes('maxConcurrentMembers'),
+      'the delegation row exposes its concurrency ceiling')
+    assert.ok(JSON.stringify(host.Config.toJSON()).includes('reminderEveryTurns'),
+      'the mode row exposes its reminder cadence')
+  })
   test('both rows reach ACTIVE in the order the bundle patch mounts them', async () => {
     const host = await import('../lib/host.js')
     const delegate = await import('../lib/delegate.js')
     const root = new Context()
     services(root)
-    const mode = root.plugin(host.default, host.Config.parse({ mode: 'maximum', catalog: { routes: [] }, section: 'x' }))
+    const mode = root.plugin(host.default, { mode: 'maximum', catalog: { routes: [] }, section: 'x' })
     await settle()
     assert.equal(STATE[mode.state], 'active', 'the mode row provides the `ultracode` service')
+    // The Loader validates the raw config and hands the plugin that raw object; a
+    // resolved config carries live settings references and is not what a mount
+    // receives.
     const tool = root.plugin({ name: delegate.name, inject: delegate.inject, apply: delegate.apply, Config: delegate.Config },
-      delegate.Config.parse({ provider: 'spawn' }))
+      { provider: 'spawn' })
     await settle()
-    assert.equal(STATE[tool.state], 'active')
+    assert.equal(STATE[tool.state], 'active', `the tool row activates: ${String(tool.error)}`)
   })
 })

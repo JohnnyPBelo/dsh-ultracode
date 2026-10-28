@@ -158,6 +158,67 @@ describe('0.2.x subagent runtime (startActivation)', () => {
     assert.match(value.output, /stopped with "error": no API key for provider route "deepseek-official"/)
     assert.equal(ultraRecords(session).at(-1).data.passed, false)
   })
+  test('retries a transient provider failure instead of surrendering the whole task', async () => {
+    // The real long-horizon failure: a child twelve steps into a multi-hour
+    // download died on "Service temporarily overloaded", and the task reported
+    // only `stopped with "error"`. The retry is what makes the delegation
+    // survive an upstream hiccup.
+    const subagents = activationRuntime([
+      { output: [], stopReason: 'error', diagnostic: 'Upstream error from Nvidia: Service temporarily overloaded' },
+      { output: text('downloaded all three models'), stopReason: 'completed' },
+    ])
+    const { definition } = await bootDelegate({ subagents, delegateConfig: { provider: 'spawn', retryBackoffMs: 0 } })
+    const session = activeSession()
+    const value = await definition.execute({ description: 'downloads', prompt: 'x' }, exec(modernAgent(session)))
+    assert.equal(subagents.started.length, 2)
+    assert.equal(value.passed, true)
+    assert.match(value.output, /downloaded all three models/)
+    const members = ultraRecords(session).filter(record => String(record.type).endsWith('/member'))
+    assert.equal(members.length, 2, 'each attempt is its own member row')
+  })
+  test('the tool description tells the model how to split long-horizon work', async () => {
+  // A multi-hour task handed over as one monolithic prompt cannot be validated
+  // round by round: the first failure ends the whole delegation with one opaque
+  // line. The description therefore states the unit-of-work rule the caller must
+  // follow, and this pins it so a later edit cannot quietly drop it.
+  const delegate = await import('../lib/delegate.js')
+  assert.match(delegate.DESCRIPTION, /Long-horizon work/)
+  assert.match(delegate.DESCRIPTION, /one entry in `tasks` per independently checkable unit/)
+  assert.match(delegate.DESCRIPTION, /self-contained/)
+})
+
+test('does not retry a failure a retry cannot change', async () => {
+    const subagents = activationRuntime([
+      { output: [], stopReason: 'error', diagnostic: 'provider "nope" is not registered' },
+      { output: text('should never run'), stopReason: 'completed' },
+    ])
+    const { definition } = await bootDelegate({ subagents, delegateConfig: { provider: 'spawn', retryBackoffMs: 0 } })
+    const value = await definition.execute({ description: 'fails', prompt: 'x' }, exec(modernAgent(activeSession())))
+    assert.equal(subagents.started.length, 1)
+    assert.equal(value.passed, false)
+  })
+  test("reports the child's own error instead of one opaque word", async () => {
+    // The runtime reports a failed child as `stopReason: "error"` with no
+    // diagnostic, which is how a real long-horizon task reported exactly
+    // "[the subagent stopped with \"error\"]" and nothing else.
+    let release
+    const subagents = activationRuntime([() => {}], { onStart: ({ release: releaseChild }) => { release = releaseChild } })
+    const booted = await bootDelegate({ subagents, delegateConfig: { provider: 'spawn', maxTransientRetries: 0 } })
+    const session = activeSession()
+    const running = booted.definition.execute({ description: 'fails', prompt: 'x' }, exec(modernAgent(session)))
+    await settle()
+    // The child's own log carries the reason; the observer folds it into the
+    // settled result so the caller sees why the task stopped.
+    booted.root.emit('session/event', { ...newSession(), id: 'child-1' }, {
+      type: 'turn/end',
+      seq: 1,
+      data: { turn: 1, reason: { kind: 'error', error: { message: 'Upstream error from Nvidia: Service temporarily overloaded' } } },
+    })
+    release({ output: [], stopReason: 'error' })
+    const value = await running
+    assert.equal(value.passed, false)
+    assert.match(value.output, /Service temporarily overloaded/)
+  })
   test('cancelling the tool call disposes the activation', async () => {
     const subagents = activationRuntime([() => {}])
     const { definition } = await bootDelegate({ subagents })
@@ -277,7 +338,13 @@ describe('visibility and guards', () => {
     await assert.rejects(definition.execute({ description: 'x', prompt: 'x' }, exec(modernAgent(session))), /UltraCode is not active/)
     const section = systemPrompt.sections.get('tool:ultracode_delegate')
     assert.equal(section.text({ agent: modernAgent(session) }), '')
-    assert.match(section.text({ agent: modernAgent(activeSession()) }), /ultracode_delegate/)
+    const guidance = section.text({ agent: modernAgent(activeSession()) })
+    assert.match(guidance, /ultracode_delegate/)
+    // A delegation may run for hours, so the guidance has to say that the child
+    // owns the work and that a transient failure is retried rather than final.
+    assert.match(guidance, /may run for hours/)
+    assert.match(guidance, /retried automatically/)
+    assert.match(guidance, /cannot see this conversation/)
     assert.equal(ultraRecords(session).length, 0, 'a refused call writes no records')
   })
   test('continuable() needs the 0.1.x continuation calls, not just a continuable provider', () => {

@@ -11,20 +11,24 @@ const BUNDLE_CONFIG = { mode: 'maximum', keyword: 'ultracode', reminderEveryTurn
 
 describe(`config (dsh-session ${world.sessionVersion})`, () => {
   test('the bundle default validates and needs no catalog or section', () => {
-    const parsed = Config.parse(BUNDLE_CONFIG)
+    const parsed = BUNDLE_CONFIG
     const resolved = host.resolveConfig(parsed)
     assert.equal(resolved.section, DEFAULT_SECTION)
     assert.deepEqual(resolved.catalog.routes, [])
   })
   test('an override that names only the catalog still loads', () => {
-    const resolved = host.resolveConfig(Config.parse({ catalog: { routes: [{ provider: 'openrouter', model: 'flash', effort: 'max' }] } }))
+    const resolved = host.resolveConfig({ catalog: { routes: [{ provider: 'openrouter', model: 'flash', effort: 'max' }] } })
     assert.equal(resolved.catalog.routes.length, 1)
     assert.equal(resolved.section, DEFAULT_SECTION)
   })
   test('the controller declares its schema so the loader validates the row', () => {
     assert.equal(UltraCodeController.Config, Config)
-    assert.equal(Config['~standard'].validate({ reminderEveryTurns: 'ten' }).issues?.length > 0, true)
-    assert.deepEqual(Config['~standard'].validate(undefined).value, {})
+    assert.throws(() => Config({ reminderEveryTurns: 'ten' }), /reminderEveryTurns/)
+  })
+  test('the schema renders a settings form, which needs toJSON and a volatile field', () => {
+    assert.equal('toJSON' in Config, true)
+    const volatile = Object.values(Config.toJSON().refs).filter(node => node?.meta?.volatile)
+    assert.equal(volatile.length > 0, true)
   })
   test('an empty section is refused', () => {
     assert.throws(() => host.resolveConfig({ section: '   ' }), /section/)

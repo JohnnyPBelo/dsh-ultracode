@@ -42,9 +42,9 @@ describe('bundle patch', { skip: helper('js-yaml') === undefined && 'this runtim
   test('names no provider an installation might lack', async () => {
     assert.equal(rows[0].config.catalog, undefined)
     const { Config, resolveConfig } = await import('../lib/host.js')
-    assert.deepEqual(resolveConfig(Config.parse(rows[0].config)).catalog.routes, [])
+    assert.deepEqual(resolveConfig(rows[0].config).catalog.routes, [])
     const delegate = await import('../lib/delegate.js')
-    assert.doesNotThrow(() => delegate.Config.parse(rows[1].config))
+    assert.doesNotThrow(() => delegate.Config(rows[1].config))
   })
 })
 

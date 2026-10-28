@@ -76,6 +76,14 @@ The delegation tool has its own row:
 | `maxValidationRounds` | `3` | Validator rejections a `frugal` run may take before reporting failure. |
 | `maxTaskTokens` | unset | Provider-billed tokens one `frugal` task may spend, summed over every member. |
 | `maxConcurrentMembers` | `0` (derived) | Members of one fan-out that may run at once. `0` derives the host's available parallelism minus two, capped at 16. |
+| `maxTransientRetries` | `3` | Retries for a provider failure a later attempt can survive (rate limit, transport reset). A failure a retry cannot change — an aborted call, a rejected prompt — ends the task at once. |
+| `retryBackoffMs` | `2000` | Base delay between retries; it doubles each attempt. |
+
+### Settings card
+
+Both rows publish a page under the Plugins tab, and the page renders the SERVED schema rather than a fixed field list: the mode row and the delegation row have different `Config` objects, so a hardcoded page showed one row's fields under the other's title. Add a field to either `Config` and it appears without a client change.
+
+The two dictionary labels a field uses come from its dotted path — `settings.field.maxValidationRounds` and `settings.field.maxValidationRounds.hint` — and a path with no label renders under its own name instead of disappearing. Nested writes are sent with one path segment per part, because `set()` addresses a single key and would otherwise store a field literally named `roles.coder`.
 
 ## Modes
 
