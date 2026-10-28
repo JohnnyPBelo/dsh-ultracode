@@ -590,7 +590,12 @@ function UltraCodeSettings(props) {
 		return () => { live = false; };
 	}, [loadCatalog]);
 	if (props.view === "summary") return typeof t === "function" ? t("settings.summary") : "UltraCode routing and delegation";
-	if (form === void 0) return null;
+	// A settings write re-edits the Loader entry, which restarts the plugin and
+	// briefly leaves the mirror without this namespace. Returning null there
+	// blanked the whole page until the user navigated away and back, so the
+	// unavailable state renders its own message instead.
+	if (form === void 0)
+		return react_jsx_runtime.jsx("p", { className: UltraCodeSettings_module_css_default.note, children: typeof t === "function" ? t("settings.unavailable") : "Configuration is unavailable." });
 	const options = routeOptions(catalog);
 	const value = snapshot.value ?? {};
 	const disabled = snapshot.writable !== true || snapshot.status !== "ready";

@@ -402,7 +402,31 @@ describe('settings page', () => {
     // element tree, so it must be read directly rather than walked.
     assert.equal(String(summary), 'settings.summary', 'the one-liner is the dictionary line, not a crash')
     const noForm = await client.hooks.render({ type: client.UltraCodeSettings, props: { t: key => key } })
-    assert.deepEqual([...walk(noForm)], [], 'a page render without a form renders nothing instead of throwing')
+    // A settings write re-edits the Loader entry and restarts the plugin, which
+    // briefly leaves the mirror without this namespace. That transient must
+    // render its own message: returning nothing blanked the page for good,
+    // because the render that would have re-read the form never happened.
+    const nodes = [...walk(noForm)]
+    assert.equal(nodes.length, 1, 'a page render without a form still renders its unavailable notice')
+    assert.equal(nodes[0].type, 'p', 'the unavailable notice is a paragraph')
+    assert.equal(nodes[0].props.children, 'settings.unavailable', 'the notice is the dictionary line')
+  })
+
+  test('a namespace that is momentarily unavailable renders its notice instead of nothing', async () => {
+    const client = await loadClient(RC3_PRIMITIVES)
+    // While a write re-edits the Loader entry the mirror drops this namespace,
+    // so the controller reports `unavailable`. Rendering nothing there left the
+    // page blank permanently: the snapshot that would restore the form arrives
+    // with the next mirror update, but no render is scheduled from a null.
+    const form = {
+      subscribe: () => () => {},
+      getSnapshot: () => ({ status: 'unavailable', writable: true, value: undefined }),
+      mutate: () => Promise.resolve(true),
+    }
+    const tree = await client.hooks.render({ type: client.UltraCodeSettings, props: { settingsForm: form, schema: SERVED[0].schema, t: key => key } })
+    const nodes = [...walk(tree)]
+    assert.equal(nodes.length, 1, 'the unavailable state renders one notice')
+    assert.equal(nodes[0].props.children, 'settings.unavailable', 'the notice is the dictionary line')
   })
 
   test('the page mounts through configForms and reports the namespace', async () => {
