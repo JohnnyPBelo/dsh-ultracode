@@ -242,7 +242,10 @@ function routeOptions(catalog) {
 		for (const model of group.models ?? []) {
 			const value = String(model.id);
 			list.push({ value, label: model.label ?? value });
-			efforts.set(`${group.id}\u0000${value}`, model.reasoning?.efforts ?? NO_EFFORTS);
+			// The Host declares each rung as `{ id, name }`; a select option needs
+			// `{ value, label }`, and handing the raw records to React renders an
+			// object as a child, which is a hard render error.
+			efforts.set(`${group.id}\u0000${value}`, (model.reasoning?.efforts ?? NO_EFFORTS).map((rung) => ({ value: rung.id, label: rung.name ?? rung.id })));
 		}
 		models.set(group.id, list);
 	}
@@ -307,7 +310,8 @@ function choicesOf(schema, node) {
 * @param props - label, hint, and the control.
 * @returns the labelled control.
 */
-function Field({ label, hint, children }) {
+function Field(props) {
+	const { label, hint, children } = props;
 	return react_jsx_runtime.jsxs("label", {
 		className: UltraCodeSettings_module_css_default.field,
 		children: [
@@ -322,7 +326,8 @@ function Field({ label, hint, children }) {
 * @param props - value, options, change handler, and disabled flag.
 * @returns the select control.
 */
-function Select({ value, options, onChange, disabled, placeholder }) {
+function Select(props) {
+	const { value, options, onChange, disabled, placeholder } = props;
 	const known = options.some((option) => option.value === value);
 	return react_jsx_runtime.jsxs("select", {
 		className: UltraCodeSettings_module_css_default.select,
@@ -358,7 +363,8 @@ function labelKey(path) {
 * @param props - the route, its options, and the change handler.
 * @returns the three selects and, when removable, the remove button.
 */
-function RouteRow({ route, options, disabled, t, onChange, onRemove }) {
+function RouteRow(props) {
+	const { route, options, disabled, t, onChange, onRemove } = props;
 	const current = route ?? {};
 	const rungs = options.effortsFor(current.provider, current.model);
 	return react_jsx_runtime.jsxs("div", {
@@ -382,7 +388,7 @@ function RouteRow({ route, options, disabled, t, onChange, onRemove }) {
 				value: current.effort ?? "",
 				disabled,
 				placeholder: t("settings.effort.default"),
-				options: rungs.map((rung) => ({ value: rung, label: rung })),
+				options: rungs,
 				onChange: (next) => { onChange({ effort: next === "" ? undefined : next }); }
 			}),
 			onRemove === undefined ? null : react_jsx_runtime.jsx("button", {
@@ -569,7 +575,31 @@ const EMPTY_FORM_SNAPSHOT = Object.freeze({ status: "unavailable", value: void 0
 * @param props - the injected form controller, the schema envelope, and the dictionary.
 * @returns the page.
 */
+// The page outlet CALLS a row-config entry as a plain function to learn its
+// one-line summary, outside any React render. A hook in that call is an invalid
+// hook call — React throws #321 and the outlet's error boundary blanks the whole
+// page, so this entry keeps no hooks of its own: it dispatches, and the hooks
+// live in a child element React instantiates itself.
 function UltraCodeSettings(props) {
+	const safe = props ?? {};
+	if (safe.view === "summary") return typeof safe.t === "function" ? safe.t("settings.summary") : "UltraCode routing and delegation";
+	return react_jsx_runtime.jsx(UltraCodeSettingsBody, safe);
+}
+/**
+* Render-time capture for the card subtree. The slot outlet's boundary blanks
+* the page without saying why, so the card owns a boundary that prints the
+* failure it caught instead of leaving the user with an empty panel.
+*/
+var UltraCodeCapture = class extends react.Component {
+	state = { error: undefined };
+	static getDerivedStateFromError(error) { return { error: error }; }
+	render() {
+		if (this.state.error !== undefined)
+			return react_jsx_runtime.jsx("pre", { style: { color: "crimson", whiteSpace: "pre-wrap" }, children: "CARD CRASH: " + String(this.state.error && (this.state.error.stack || this.state.error.message) || this.state.error) });
+		return this.props.children;
+	}
+};
+function UltraCodeSettingsBody(props) {
 	const { settingsForm: form, loadCatalog, t, schema } = props;
 	// Every hook runs before any early return: this entry renders both as the
 	// one-liner under the row's title and as the page body, and a hook order
@@ -589,7 +619,6 @@ function UltraCodeSettings(props) {
 		}).catch(() => {});
 		return () => { live = false; };
 	}, [loadCatalog]);
-	if (props.view === "summary") return typeof t === "function" ? t("settings.summary") : "UltraCode routing and delegation";
 	// A settings write re-edits the Loader entry, which restarts the plugin and
 	// briefly leaves the mirror without this namespace. Returning null there
 	// blanked the whole page until the user navigated away and back, so the
@@ -612,7 +641,7 @@ function UltraCodeSettings(props) {
 	if (snapshot.status === "loading")
 		return react_jsx_runtime.jsx("p", { className: UltraCodeSettings_module_css_default.note, children: t("settings.saving") });
 	const root = typeof schema?.uid === "number" ? nodeAt(schema, schema.uid) : undefined;
-	return react_jsx_runtime.jsxs("section", {
+	const tree = react_jsx_runtime.jsxs("section", {
 		className: UltraCodeSettings_module_css_default.card,
 		children: [
 			react_jsx_runtime.jsx("h2", { className: UltraCodeSettings_module_css_default.title, children: t("settings.title") }),
@@ -642,6 +671,7 @@ function UltraCodeSettings(props) {
 			})
 		]
 	});
+	return react_jsx_runtime.jsx(UltraCodeCapture, { children: tree });
 }
 //#endregion
 		//#region lib/types/client/task-definition.js

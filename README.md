@@ -83,6 +83,10 @@ The delegation tool has its own row:
 
 Both rows publish a page under the Plugins tab, and the page renders the SERVED schema rather than a fixed field list: the mode row and the delegation row have different `Config` objects, so a hardcoded page showed one row's fields under the other's title. Add a field to either `Config` and it appears without a client change.
 
+A `Config` field renders only when its schema declares a widget the page can draw, and a field with a default shows that default instead of an empty box. `maxTaskTokens` and `maxConcurrentMembers` stay empty on purpose: both mean "no ceiling", and a written zero would stop the first member before it produced anything.
+
+The Host serves each reasoning rung as `{ id, name }`, so the card maps every catalog record to a `{ value, label }` option. Handing the records straight to React throws `Minified React error #31` (objects are not valid as a child), and the shell's slot boundary answers that with a blank page rather than a message — which is why the card also carries its own render boundary that prints the failure it caught.
+
 The two dictionary labels a field uses come from its dotted path — `settings.field.maxValidationRounds` and `settings.field.maxValidationRounds.hint` — and a path with no label renders under its own name instead of disappearing. Nested writes are sent with one path segment per part, because `set()` addresses a single key and would otherwise store a field literally named `roles.coder`.
 
 ## Modes

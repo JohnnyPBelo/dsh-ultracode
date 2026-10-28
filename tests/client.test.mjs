@@ -24,6 +24,9 @@ function createHooks() {
     // across the summary and page renders of the same entry.
     useCallback(fn) { return fn },
     useSyncExternalStore(_subscribe, getSnapshot) { return getSnapshot() },
+    // The card owns a render boundary so its own failures print instead of
+    // blanking the page; the boundary is a class component.
+    Component: class { constructor(props) { this.props = props; this.state = {} } },
     /** Render one component, flush its effects, render again, and return the tree. */
     async render(element) {
       index = 0
@@ -74,7 +77,17 @@ function render(element) {
   if (Array.isArray(element)) return element.map(render)
   if (element === null || typeof element !== 'object') return element
   if (element.type === undefined) throw new Error('element with an undefined type (a missing primitive)')
-  if (typeof element.type === 'function') return render(element.type(element.props))
+  if (typeof element.type === 'function') {
+    // A class component (the card's own render boundary) is instantiated and
+    // its render read, exactly as React does.
+    if (element.type.prototype !== undefined && typeof element.type.prototype.render === 'function') {
+      const instance = new element.type(element.props)
+      instance.props = element.props
+      instance.state = instance.state ?? {}
+      return render(instance.render())
+    }
+    return render(element.type(element.props))
+  }
   const children = element.props.children
   return { ...element, props: { ...element.props, children: children === undefined ? undefined : render(children) } }
 }
@@ -310,9 +323,11 @@ describe('settings page', () => {
   const CATALOG = {
     default: { provider: 'deepseek-official', model: 'deepseek-v4-pro', reasoningEffort: 'max' },
     groups: [
+      // The Host declares each rung as a record, exactly as `session/modelCatalog`
+      // serves it.
       { id: 'deepseek-official', label: 'DeepSeek', models: [
-        { id: 'deepseek-v4-pro', label: 'V4 Pro', reasoning: { efforts: ['off', 'low', 'high', 'max'] } },
-        { id: 'deepseek-v4-flash', label: 'V4 Flash', reasoning: { efforts: ['off', 'low', 'high', 'max'] } },
+        { id: 'deepseek-v4-pro', label: 'V4 Pro', reasoning: { efforts: [{ id: 'off', name: 'Off' }, { id: 'low', name: 'Low' }, { id: 'high', name: 'High' }, { id: 'max', name: 'Max' }] } },
+        { id: 'deepseek-v4-flash', label: 'V4 Flash', reasoning: { efforts: [{ id: 'off', name: 'Off' }, { id: 'low', name: 'Low' }, { id: 'high', name: 'High' }, { id: 'max', name: 'Max' }] } },
       ] },
       { id: 'nvidia', label: 'NVIDIA', models: [
         { id: 'qwen3-max', label: 'Qwen3 Max', reasoning: { efforts: [] } },
@@ -325,11 +340,37 @@ describe('settings page', () => {
     const options = client.routeOptions(CATALOG)
     assert.deepEqual(options.providers.map(p => p.value), ['deepseek-official', 'nvidia'])
     assert.deepEqual(options.models.get('deepseek-official').map(m => m.value), ['deepseek-v4-pro', 'deepseek-v4-flash'])
-    assert.deepEqual(options.effortsFor('deepseek-official', 'deepseek-v4-pro'), ['off', 'low', 'high', 'max'])
+    // The rung records become select options, so the page never hands an object
+    // to React as a child (that is a hard render error, not a style problem).
+    assert.deepEqual(options.effortsFor('deepseek-official', 'deepseek-v4-pro'), [
+      { value: 'off', label: 'Off' }, { value: 'low', label: 'Low' }, { value: 'high', label: 'High' }, { value: 'max', label: 'Max' }
+    ])
     // A model whose adapter declares no rungs offers none, so an unacceptable
     // value cannot be selected.
     assert.deepEqual(options.effortsFor('nvidia', 'qwen3-max'), [])
     assert.deepEqual(options.effortsFor(undefined, undefined), [])
+  })
+
+  // Regression: `session/modelCatalog` serves each rung as `{ id, name }`, and an
+  // earlier revision handed those records straight to React as option children.
+  // React answers `Minified React error #31` (objects are not valid as a child)
+  // and the slot boundary blanks the page, so no interactive smoke test sees it.
+  test('every rendered effort option is a string, never a catalog record', async () => {
+    const client = await loadClient(RC3_PRIMITIVES)
+    const form = fakeForm({ catalog: { routes: [{ provider: 'deepseek-official', model: 'deepseek-v4-pro', effort: 'max' }] } })
+    const tree = await client.hooks.render({ type: client.UltraCodeSettings, props: {
+      settingsForm: form,
+      schema: SERVED[0].schema,
+      loadCatalog: () => Promise.resolve({ ok: true, value: CATALOG }),
+      t: key => key,
+    } })
+    const options = [...walk(tree)].filter(node => node.type === 'option')
+    assert.ok(options.length > 0, 'the route editor rendered its selects')
+    for (const option of options) {
+      for (const child of [option.props.children].flat()) {
+        assert.equal(typeof child, 'string', `option child must be a string, got ${JSON.stringify(child)}`)
+      }
+    }
   })
 
   test('the page renders every dropdown with the stored value selected', async () => {

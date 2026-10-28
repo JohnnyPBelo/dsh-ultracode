@@ -25,7 +25,9 @@ async function loadClient() {
   const jsx = () => null
   const modules = {
     'react/jsx-runtime': { jsx, jsxs: jsx, Fragment: 'Fragment' },
-    react: { useState: initial => [initial, () => {}] },
+    // The card keeps a render boundary, so the stub needs a base class as well
+    // as the hooks the body uses.
+    react: { useState: initial => [initial, () => {}], useCallback: fn => fn, useSyncExternalStore: (_s, g) => g(), useEffect: () => {}, Component: class { constructor(props) { this.props = props; this.state = {} } } },
     '@deepseek-ai/dsh-client-ui-primitives': { StateDot: () => null },
   }
   return definition.factory(name => modules[name])

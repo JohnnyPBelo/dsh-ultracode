@@ -1,6 +1,6 @@
 {
   "name": "dsh-ultracode",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "UltraCode for DeepSeek Harness: a deep-work mode that routes work across models, delegates in parallel, and verifies the result before reporting it.",
   "license": "MIT",
   "type": "module",
